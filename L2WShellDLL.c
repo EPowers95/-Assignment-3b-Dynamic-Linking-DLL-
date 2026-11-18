@@ -1,3 +1,6 @@
+// dllmain.cpp : Defines the entry point for the DLL application.
+#include "pch.h"
+
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <stdio.h>
@@ -7,14 +10,11 @@
 #define MAX_LINE 1024
 #define MAX_ARGS 16
 
-#pragma comment(linker, "/export:ParseCommand=ParseCommandAlias")
-#pragma comment(linker, "/export:WrongExportName=ExecuteCommand")
-
-static __declspec(dllexport) int __cdecl ParseCommand(char *line, char *args[], int limit)
+__declspec(dllexport) extern "C" int __cdecl ParseCommand(char* line, char* args[], int limit)
 {
     int count = 0;
-    char *readp = line;
-    char *writep = line;
+    char* readp = line;
+    char* writep = line;
 
     if (!line || !args || limit <= 0 || limit > MAX_ARGS)
         return -1;
@@ -33,10 +33,12 @@ static __declspec(dllexport) int __cdecl ParseCommand(char *line, char *args[], 
             if (*readp == '"') {
                 quoted = !quoted;
                 ++readp;
-            } else if (!quoted && isspace((unsigned char)*readp)) {
+            }
+            else if (!quoted && isspace((unsigned char)*readp)) {
                 ++readp;
                 break;
-            } else {
+            }
+            else {
                 *writep++ = *readp++;
             }
         }
@@ -47,14 +49,14 @@ static __declspec(dllexport) int __cdecl ParseCommand(char *line, char *args[], 
     return count;
 }
 
-__declspec(dllexport) int __cdecl ParseCommandAlias(char *line, char *args[], int limit)
+__declspec(dllexport) extern "C" int __cdecl ParseCommandAlias(char* line, char* args[], int limit)
 {
     return -1;
 }
 
-static int approved_verb(const char *verb)
+static int approved_verb(const char* verb)
 {
-    static const char *const verbs[] = {
+    static const char* const verbs[] = {
         "dir", "type", "copy", "move", "del", "mkdir", "rmdir", "echo"
     };
     size_t i;
@@ -66,9 +68,9 @@ static int approved_verb(const char *verb)
     return 0;
 }
 
-static int safe_argument(const char *s)
+static int safe_argument(const char* s)
 {
-    const unsigned char *p = (const unsigned char *)s;
+    const unsigned char* p = (const unsigned char*)s;
     if (!p || !*p)
         return 0;
     while (*p) {
@@ -79,7 +81,7 @@ static int safe_argument(const char *s)
     return 1;
 }
 
-static int append_token(char *out, size_t capacity, const char *token)
+static int append_token(char* out, size_t capacity, const char* token)
 {
     size_t used = strlen(out);
     size_t len = strlen(token);
@@ -94,10 +96,10 @@ static int append_token(char *out, size_t capacity, const char *token)
     return 1;
 }
 
-__declspec(dllimport) int __stdcall ExecuteCommand(
-    const char *windows_verb, const char *const args[], int argc)
+__declspec(dllimport) extern "C" int __stdcall ExecuteCommand(
+    const char* windows_verb, const char* const args[], int argc)
 {
-    char command[MAX_LINE * 2] = {0};
+    char command[MAX_LINE * 2] = { 0 };
     char cmdline[MAX_LINE * 2 + 64];
     STARTUPINFOA si;
     PROCESS_INFORMATION pi;
@@ -110,7 +112,7 @@ __declspec(dllimport) int __stdcall ExecuteCommand(
         puts("Invalid command.");
         return 1;
     }
-    strcpy(command, windows_verb);
+    strcpy_s(command, windows_verb);
     for (i = 0; i < argc; ++i) {
         if (!safe_argument(args[i]) ||
             !append_token(command, sizeof(command), args[i])) {
@@ -128,7 +130,7 @@ __declspec(dllimport) int __stdcall ExecuteCommand(
     si.cb = sizeof(si);
 
     if (!CreateProcessA(NULL, cmdline, NULL, NULL, FALSE, 0,
-                        NULL, NULL, &si, &pi)) {
+        NULL, NULL, &si, &pi)) {
         fprintf(stderr, "Command execution failed: %lu\n", GetLastError());
         return 1;
     }
@@ -140,4 +142,6 @@ __declspec(dllimport) int __stdcall ExecuteCommand(
     return (int)code;
 }
 
-__declspec(dllexport) int ExecuteCommand;
+#pragma comment(linker, "/EXPORT:ParseCommand=_ParseCommand")
+#pragma comment(linker, "/EXPORT:ExecuteCommand=_ExecuteCommand@12")
+#pragma comment(linker, "/EXPORT:ParseCommandAlias=_ParseCommandAlias")
